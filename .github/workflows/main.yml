@@ -1,10 +1,12 @@
-name: Security Scanning
+name: Security Analysis Workflow
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
   analyze:
@@ -14,11 +16,6 @@ jobs:
       actions: read
       contents: read
       security-events: write
-
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'python' ]
 
     steps:
     - name: Checkout repository
@@ -50,6 +47,7 @@ jobs:
     name: Perform Dynamic Analysis with OWASP ZAP (DAST)
     runs-on: ubuntu-latest
     needs: analyze
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -74,7 +72,7 @@ jobs:
         docker exec zap zap-baseline.py -t http://localhost:8080 -g gen.conf -r zap-report.html
 
     - name: Upload ZAP Report as artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: zap-report
         path: zap-report.html
