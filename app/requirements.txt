@@ -13,7 +13,7 @@ pytz==2024.1
 requests==2.32.3
 scapy==2.5.0
 sgmllib3k==1.0.0
-sgp4==2.23
+sgp4==2.24
 six==1.16.0
 skyfield==1.48
 speedtest-cli==2.1.3
