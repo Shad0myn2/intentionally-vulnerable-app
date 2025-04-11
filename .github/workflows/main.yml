@@ -1,4 +1,4 @@
-name: CodeQL Security Scan
+name: Security Scanning
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   analyze:
-    name: Analyze Code with CodeQL
+    name: Analyze Code with CodeQL (SAST)
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -24,6 +24,17 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        python -m venv venv
+        source venv/bin/activate
+        pip install -r requirements.txt
+
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v2
       with:
@@ -34,3 +45,36 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
+
+  dast:
+    name: Perform Dynamic Analysis with OWASP ZAP (DAST)
+    runs-on: ubuntu-latest
+    needs: analyze
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Docker
+      run: |
+        sudo apt-get update
+        sudo apt-get install docker.io
+
+    - name: Install dependencies for ZAP scan
+      run: |
+        python -m venv venv
+        source venv/bin/activate
+        pip install -r requirements.txt
+
+    - name: Start ZAP in Docker
+      run: |
+        docker run -d -u zap --name zap -p 8080:8080 owasp/zap2docker-stable
+
+    - name: Run ZAP Scan
+      run: |
+        docker exec zap zap-baseline.py -t http://localhost:8080 -g gen.conf -r zap-report.html
+
+    - name: Upload ZAP Report as artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: zap-report
+        path: zap-report.html
