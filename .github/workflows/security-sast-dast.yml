@@ -25,18 +25,26 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v3
       with:
-        python-version: '3.x'
+        python-version: '3.10'
 
-    - name: Install build dependencies (for compiling C extensions like Pandas)
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install build dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential python3-dev libatlas-base-dev gfortran
 
-    - name: Install dependencies
+    - name: Install Python dependencies
       run: |
         python -m venv venv
         source venv/bin/activate
-        pip install --upgrade pip  # Update pip to avoid old version issues
+        pip install --upgrade pip
         pip install -r requirements.txt
 
     - name: Initialize CodeQL
@@ -63,24 +71,43 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Set up Docker
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y docker.io
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
 
-    - name: Install dependencies for ZAP scan
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install Python dependencies
       run: |
         python -m venv venv
         source venv/bin/activate
+        pip install --upgrade pip
         pip install -r requirements.txt
+
+    - name: Start Python App (adjust this to match your entry point)
+      run: |
+        source venv/bin/activate
+        nohup python app.py &  # Replace with your actual app entry point
+
+    - name: Wait for App to Start
+      run: sleep 10  # Adjust if app takes longer to boot
 
     - name: Start ZAP in Docker
       run: |
-        docker run -d --name zap -u zap -p 8080:8080 owasp/zap2docker-stable
+        sudo apt-get update
+        sudo apt-get install -y docker.io
+        docker run -d --name zap -u zap -p 8090:8090 owasp/zap2docker-stable
 
     - name: Run ZAP Baseline Scan
       run: |
-        docker exec zap zap-baseline.py -t http://localhost:8080 -g gen.conf -r zap-report.html || true
+        docker exec zap zap-baseline.py -t http://host.docker.internal:8000 -g gen.conf -r zap-report.html || true
 
     - name: Upload ZAP Report as artifact
       uses: actions/upload-artifact@v3
@@ -91,4 +118,3 @@ jobs:
     - name: Summarize ZAP Scan results
       run: |
         echo "### OWASP ZAP DAST Scan Completed. [ZAP Report Download Available] :mag:" >> $GITHUB_STEP_SUMMARY
-
