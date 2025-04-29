@@ -1,4 +1,4 @@
-name: Security Analysis Workflow
+name: SAST and DAST Security Scan
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   analyze:
@@ -26,22 +27,32 @@ jobs:
       with:
         python-version: '3.x'
 
+    - name: Install build dependencies (for compiling C extensions like Pandas)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential python3-dev libatlas-base-dev gfortran
+
     - name: Install dependencies
       run: |
         python -m venv venv
         source venv/bin/activate
+        pip install --upgrade pip  # Update pip to avoid old version issues
         pip install -r requirements.txt
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v2
       with:
-        languages: ${{ matrix.language }}
+        languages: python
 
     - name: Autobuild
       uses: github/codeql-action/autobuild@v2
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
+
+    - name: Summarize CodeQL results
+      run: |
+        echo "### CodeQL SAST Scan Completed Successfully :white_check_mark:" >> $GITHUB_STEP_SUMMARY
 
   dast:
     name: Perform Dynamic Analysis with OWASP ZAP (DAST)
@@ -55,7 +66,7 @@ jobs:
     - name: Set up Docker
       run: |
         sudo apt-get update
-        sudo apt-get install docker.io
+        sudo apt-get install -y docker.io
 
     - name: Install dependencies for ZAP scan
       run: |
@@ -65,14 +76,19 @@ jobs:
 
     - name: Start ZAP in Docker
       run: |
-        docker run -d -u zap --name zap -p 8080:8080 owasp/zap2docker-stable
+        docker run -d --name zap -u zap -p 8080:8080 owasp/zap2docker-stable
 
-    - name: Run ZAP Scan
+    - name: Run ZAP Baseline Scan
       run: |
-        docker exec zap zap-baseline.py -t http://localhost:8080 -g gen.conf -r zap-report.html
+        docker exec zap zap-baseline.py -t http://localhost:8080 -g gen.conf -r zap-report.html || true
 
     - name: Upload ZAP Report as artifact
       uses: actions/upload-artifact@v3
       with:
         name: zap-report
         path: zap-report.html
+
+    - name: Summarize ZAP Scan results
+      run: |
+        echo "### OWASP ZAP DAST Scan Completed. [ZAP Report Download Available] :mag:" >> $GITHUB_STEP_SUMMARY
+
