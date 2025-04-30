@@ -69,7 +69,7 @@ jobs:
 
       - name: Start Web App
         run: |
-          nohup python app.py &  # Replace with your real startup command
+          nnohup python app/app.py &
           sleep 10
 
       - name: Run ZAP Baseline Scan
