@@ -110,7 +110,7 @@ jobs:
         docker exec zap zap-baseline.py -t http://host.docker.internal:8000 -g gen.conf -r zap-report.html || true
 
     - name: Upload ZAP Report as artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v3.1.3
       with:
         name: zap-report
         path: zap-report.html
