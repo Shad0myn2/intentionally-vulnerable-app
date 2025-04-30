@@ -53,5 +53,5 @@ def dashboard():
 if __name__ == '__main__':
     # Initialize the database if not already done
     init_db()
-    # Run the Flask app
-    app.run(debug=True)
+    # Run the Flask app on all available interfaces (0.0.0.0) and port 8000
+    app.run(host='0.0.0.0', port=8000, debug=True)
