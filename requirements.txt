@@ -1,6 +1,6 @@
 certifi==2024.2.2
 charset-normalizer==3.3.2
-et-xmlfile==1.1.0
+et-xmlfile==2.0.0
 feedparser==6.0.11
 idna==3.7
 jplephem==2.22
