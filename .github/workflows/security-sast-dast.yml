@@ -1,15 +1,17 @@
-name: Full Security Scan (SAST + DAST)
+name: SAST and DAST Security Scan
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  sast:
-    name: CodeQL SAST Scan
+  analyze:
+    name: Analyze Code with CodeQL (SAST)
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -17,42 +19,56 @@ jobs:
       security-events: write
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: '3.10'
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
 
-      - name: Install dependencies
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
-        with:
-          languages: python
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential python3-dev libatlas-base-dev gfortran
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v2
+    - name: Install Python dependencies
+      run: |
+        python -m venv venv
+        source venv/bin/activate
+        pip install --upgrade pip
+        pip install -r requirements.txt
 
-      - name: Analyze
-        uses: github/codeql-action/analyze@v2
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: python
 
-      - name: Summarize CodeQL
-        run: echo "### ✅ CodeQL SAST Scan Complete" >> $GITHUB_STEP_SUMMARY
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+
+    - name: Summarize CodeQL results
+      run: |
+        echo "### CodeQL SAST Scan Completed Successfully :white_check_mark:" >> $GITHUB_STEP_SUMMARY
 
   dast:
-    name: OWASP ZAP DAST Scan
-    runs-on: ubuntu-latest
-    needs: sast
+    name: Perform Dynamic Analysis with OWASP ZAP (DAST)
+    runs-on: ubuntu-22.04
+    needs: analyze
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -60,32 +76,22 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install dependencies and run app
         run: |
-          python -m venv venv
-          source venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
+          nohup python app.py &
 
-      - name: Start Web App
+      - name: Wait for the app to start
+        run: sleep 10
+
+      - name: Run OWASP ZAP Baseline Scan
         run: |
-          nnohup python app/app.py &
-          sleep 10
-
-      - name: Run ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.10.0
-        with:
-          target: 'http://localhost:8000'
-          cmd_options: '-g zap-report.conf -r zap-report.html'
-          allow_failure: true
+          docker run --network="host" -v $(pwd):/zap/wrk:rw -t owasp/zap2docker-stable:latest \
+            zap-baseline.py -t http://localhost:8000 -r zap-report.html || true
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
-          name: zap-report
+          name: ZAP-DAST-Report
           path: zap-report.html
-
-      - name: Summarize ZAP Results
-        run: echo "### 🔍 ZAP DAST Scan Completed. Report uploaded as artifact." >> $GITHUB_STEP_SUMMARY
-
-
