@@ -68,53 +68,31 @@ jobs:
     needs: analyze
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
 
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+      - name: Install dependencies and run app
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          nohup python app.py &
 
-    - name: Install Python dependencies
-      run: |
-        python -m venv venv
-        source venv/bin/activate
-        pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Wait for the app to start
+        run: sleep 10
 
-    - name: Start Python App (adjust this to match your entry point)
-      run: |
-        source venv/bin/activate
-        nohup python app.py &  # Replace with your actual app entry point
+      - name: Run OWASP ZAP Baseline Scan
+        run: |
+          docker run --network="host" -v $(pwd):/zap/wrk:rw -t owasp/zap2docker-stable \
+            zap-baseline.py -t http://localhost:8000 -r zap-report.html || true
 
-    - name: Wait for App to Start
-      run: sleep 10  # Adjust if app takes longer to boot
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: ZAP-DAST-Report
+          path: zap-report.html
 
-    - name: Start ZAP in Docker
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y docker.io
-        docker run -d --name zap -u zap -p 8090:8090 owasp/zap2docker-stable
-
-    - name: Run ZAP Baseline Scan
-      run: |
-        docker exec zap zap-baseline.py -t http://host.docker.internal:8000 -g gen.conf -r zap-report.html || true
-
-    - name: Upload ZAP Report as artifact
-      uses: actions/upload-artifact@v3.1.3
-      with:
-        name: zap-report
-        path: zap-report.html
-
-    - name: Summarize ZAP Scan results
-      run: |
-        echo "### OWASP ZAP DAST Scan Completed. [ZAP Report Download Available] :mag:" >> $GITHUB_STEP_SUMMARY
