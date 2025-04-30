@@ -1,17 +1,15 @@
-name: SAST and DAST Security Scan
+name: Full Security Scan (SAST + DAST)
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  analyze:
-    name: Analyze Code with CodeQL (SAST)
+  sast:
+    name: CodeQL SAST Scan
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -19,56 +17,7 @@ jobs:
       security-events: write
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.10'
-
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-
-    - name: Install build dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential python3-dev libatlas-base-dev gfortran
-
-    - name: Install Python dependencies
-      run: |
-        python -m venv venv
-        source venv/bin/activate
-        pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: python
-
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v3
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
-
-    - name: Summarize CodeQL results
-      run: |
-        echo "### CodeQL SAST Scan Completed Successfully :white_check_mark:" >> $GITHUB_STEP_SUMMARY
-
-  dast:
-    name: Perform Dynamic Analysis with OWASP ZAP (DAST)
-    runs-on: ubuntu-22.04
-    needs: analyze
-
-    steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -76,23 +25,67 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies and run app
+      - name: Install dependencies
         run: |
+          python -m venv venv
+          source venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
-          nohup python app.py &
 
-      - name: Wait for the app to start
-        run: sleep 10
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: python
 
-      - name: Run OWASP ZAP Baseline Scan
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v2
+
+      - name: Summarize CodeQL
+        run: echo "### ✅ CodeQL SAST Scan Complete" >> $GITHUB_STEP_SUMMARY
+
+  dast:
+    name: OWASP ZAP DAST Scan
+    runs-on: ubuntu-latest
+    needs: sast
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
         run: |
-          docker run --network="host" -v $(pwd):/zap/wrk:rw -t owasp/zap2docker-stable \
-            zap-baseline.py -t http://localhost:8000 -r zap-report.html || true
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Start Web App
+        run: |
+          nohup python app.py &  # Replace with your real startup command
+          sleep 10
+
+      - name: Run ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.10.0
+        with:
+          target: 'http://localhost:8000'
+          cmd_options: '-g zap-report.conf -r zap-report.html'
+          allow_failure: true
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
-          name: ZAP-DAST-Report
+          name: zap-report
           path: zap-report.html
+
+      - name: Summarize ZAP Results
+        run: echo "### 🔍 ZAP DAST Scan Completed. Report uploaded as artifact." >> $GITHUB_STEP_SUMMARY
+
 
