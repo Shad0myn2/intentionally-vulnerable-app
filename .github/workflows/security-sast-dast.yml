@@ -89,7 +89,7 @@ jobs:
         run: |
           docker run --rm --network="host" \
             -v ${{ github.workspace }}:/zap/wrk/:rw \
-            owasp/zap2docker-weekly zap-baseline.py \
+            zaproxy/zap-stable zap-baseline.py \
             -t http://localhost:8000 \
             -r zap-report.html -z "-config api.disablekey=true" || true
 
