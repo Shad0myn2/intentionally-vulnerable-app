@@ -93,6 +93,17 @@ jobs:
             zaproxy/zap-bare \
             zap-baseline.py -t http://localhost:8000 -r zap-report.html || true
 
+      - name: List workspace files
+        run: ls -la ${{ github.workspace }}
+
+      - name: Check if ZAP report exists
+        run: |
+          if [ ! -f "${{ github.workspace }}/zap-report.html" ]; then
+            echo "❌ ZAP report not found!"
+            exit 1
+          fi
+          echo "✅ ZAP report found."
+
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
