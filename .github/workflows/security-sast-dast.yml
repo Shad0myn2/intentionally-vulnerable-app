@@ -67,11 +67,11 @@ jobs:
         run: pwd
 
       - name: Pull ZAP Docker Image
-        run: docker pull zaproxy/zaproxy:weekly
+        run: docker pull zaproxy/zap-stable
 
       - name: Run OWASP ZAP API Scan
         run: |
-          docker run -v $(pwd):/zap/wrk/:rw -t zaproxy/zaproxy:weeklyzap-api-scan.py \
+          docker run -v $(pwd):/zap/wrk/:rw -t zaproxy/zap-stable zap-api-scan.py \
             -t openapi.json -f openapi -c api-scan.conf -r zap-report.html || true
 
       - name: Ensure ZAP report exists
