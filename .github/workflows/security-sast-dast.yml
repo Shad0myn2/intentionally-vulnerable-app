@@ -19,48 +19,48 @@ jobs:
       security-events: write
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
 
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-    - name: Install build dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential python3-dev libatlas-base-dev gfortran
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev libatlas-base-dev gfortran
 
-    - name: Install Python dependencies
-      run: |
-        python -m venv venv
-        source venv/bin/activate
-        pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install Python dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: python
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
 
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v3
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
 
-    - name: Summarize CodeQL results
-      run: |
-        echo "### CodeQL SAST Scan Completed Successfully :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+      - name: Summarize CodeQL results
+        run: |
+          echo "### CodeQL SAST Scan Completed Successfully " >> $GITHUB_STEP_SUMMARY
 
   dast:
     name: Perform Dynamic Analysis with OWASP ZAP (DAST)
@@ -80,33 +80,18 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          nohup python app.py &
+          nohup python app/app.py &
 
       - name: Wait for the app to start
         run: sleep 10
 
       - name: Run OWASP ZAP Baseline Scan
         run: |
-          docker pull zaproxy/zap-bare:latest
-          docker run --network="host" \
-            -v $(pwd):/zap/wrk:rw \
-            -t zaproxy/zap-bare \
-            zap-baseline.py -t http://localhost:8000 -r /zap/wrk/zap-report.html || true
-
-      - name: List files for debugging
-        run: |
-          echo "Working directory: $(pwd)"
-          ls -al
-          ls -al zap-report.html || true
-
-      - name: Confirm zap-report.html exists
-        run: |
-          if [ -f zap-report.html ]; then
-            echo "ZAP report found!"
-          else
-            echo "ZAP report not found!"
-            exit 1
-          fi
+          docker run --rm --network="host" \
+            -v ${{ github.workspace }}:/zap/wrk:rw \
+            -w /zap/wrk \
+            zaproxy/zap-bare \
+            zap-baseline.py -t http://localhost:8000 -r zap-report.html || true
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
