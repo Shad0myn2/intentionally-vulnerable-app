@@ -18,15 +18,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
       - name: Cache pip dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -41,15 +41,15 @@ jobs:
           pip install -r requirements.txt
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: python
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
 
       - name: Summarize CodeQL results
         run: echo "### CodeQL SAST Scan Completed Successfully ✅" >> $GITHUB_STEP_SUMMARY
@@ -61,17 +61,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Log working directory
         run: pwd
 
       - name: Pull ZAP Docker Image
-        run: docker pull owasp/zap2docker-weekly
+        run: docker pull zaproxy/zaproxy:weekly
 
       - name: Run OWASP ZAP API Scan
         run: |
-          docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-weekly zap-api-scan.py \
+          docker run -v $(pwd):/zap/wrk/:rw -t zaproxy/zaproxy:weeklyzap-api-scan.py \
             -t openapi.json -f openapi -c api-scan.conf -r zap-report.html || true
 
       - name: Ensure ZAP report exists
