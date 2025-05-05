@@ -80,10 +80,10 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          nohup python app/app.py &
+          nohup python app.py &
 
       - name: Wait for the app to start
-        run: sleep 10
+        run: sleep 15
 
       - name: Run OWASP ZAP Baseline Scan
         run: |
@@ -91,18 +91,19 @@ jobs:
             -v ${{ github.workspace }}:/zap/wrk:rw \
             -w /zap/wrk \
             zaproxy/zap-bare \
-            zap-baseline.py -t http://localhost:8000 -r zap-report.html || true
+            zap-baseline.py -t http://localhost:8000 -r zap-report.html -z "-config api.disablekey=true" || true
 
-      - name: List workspace files
-        run: ls -la ${{ github.workspace }}
+      - name: List all files for debug
+        run: find ${{ github.workspace }} -type f
 
-      - name: Check if ZAP report exists
+      - name: Fail if report was not generated
         run: |
           if [ ! -f "${{ github.workspace }}/zap-report.html" ]; then
             echo "❌ ZAP report not found!"
             exit 1
+          else
+            echo "✅ ZAP report found."
           fi
-          echo "✅ ZAP report found."
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
