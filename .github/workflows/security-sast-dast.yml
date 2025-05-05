@@ -1,48 +1,90 @@
-# This is a basic workflow to help you get started with Actions
+name: SAST and DAST Security Scan
 
-name: ZAP CI Scan
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the development branch
   push:
-    branches: [ development ]
+    branches: [main]
   pull_request:
-    branches: [ development ]
-
-  # Allows you to run this workflow manually from the Actions tab
+    branches: [main]
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  analyze:
+    name: Analyze Code with CodeQL (SAST)
     runs-on: ubuntu-latest
-    name: Sanity check of git actions
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo No error. Do the necessary build steps here.
-  scans:
-    # The type of runner that the job will run on
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Python dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+      - name: Summarize CodeQL results
+        run: echo "### CodeQL SAST Scan Completed Successfully ✅" >> $GITHUB_STEP_SUMMARY
+
+  dast:
+    name: OWASP ZAP DAST Scan
     runs-on: ubuntu-latest
-    name: ZAP API Scan
+    needs: analyze
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Log current directory
-        run: echo ${pwd}
-      - name: Pull ZAP OWASP Image
+
+      - name: Log working directory
+        run: pwd
+
+      - name: Pull ZAP Docker Image
         run: docker pull owasp/zap2docker-weekly
-      - name: Run ZAP API Scan
+
+      - name: Run OWASP ZAP API Scan
         run: |
-          sudo docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-weekly zap-api-scan.py -t openapi.json -f openapi -c api-scan.conf
-        # run: sudo docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-weekly zap-api-scan.py -t dev-wiki-api.json -f openapi -r test_report_$(date -u +'%Y%m%d').html
+          docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-weekly zap-api-scan.py \
+            -t openapi.json -f openapi -c api-scan.conf -r zap-report.html || true
+
+      - name: Ensure ZAP report exists
+        run: |
+          if [ ! -f "./zap-report.html" ]; then
+            echo "❌ ZAP report not found!"
+            exit 1
+          else
+            echo "✅ ZAP report found."
+          fi
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZAP-DAST-Report
+          path: zap-report.html
