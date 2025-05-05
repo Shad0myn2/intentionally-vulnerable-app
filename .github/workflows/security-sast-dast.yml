@@ -78,13 +78,13 @@ jobs:
         run: sleep 20
 
       - name: Pull OWASP ZAP Docker image
-        run: docker pull owasp/zap2docker-weekly
+        run: docker pull zaproxy/zap-stable
 
       - name: Run ZAP Baseline Scan against live app
         run: |
           docker run --rm --network="host" \
             -v ${{ github.workspace }}:/zap/wrk/:rw \
-            owasp/zap2docker-weekly zap-baseline.py \
+            zaproxy/zap-stable zap-baseline.py \
             -t http://localhost:8000 -r zap-report.html -z "-config api.disablekey=true" || true
 
       - name: List files (for debug)
