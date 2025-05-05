@@ -87,8 +87,26 @@ jobs:
 
       - name: Run OWASP ZAP Baseline Scan
         run: |
-          docker run --network="host" -v $(pwd):/zap/wrk:rw -t zaproxy/zap-bare \
-            zap-baseline.py -t http://localhost:8000 -r zap-report.html || true
+          docker pull zaproxy/zap-bare:latest
+          docker run --network="host" \
+            -v $(pwd):/zap/wrk:rw \
+            -t zaproxy/zap-bare \
+            zap-baseline.py -t http://localhost:8000 -r /zap/wrk/zap-report.html || true
+
+      - name: List files for debugging
+        run: |
+          echo "Working directory: $(pwd)"
+          ls -al
+          ls -al zap-report.html || true
+
+      - name: Confirm zap-report.html exists
+        run: |
+          if [ -f zap-report.html ]; then
+            echo "ZAP report found!"
+          else
+            echo "ZAP report not found!"
+            exit 1
+          fi
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
