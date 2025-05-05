@@ -60,11 +60,11 @@ jobs:
 
       - name: Summarize CodeQL results
         run: |
-          echo "### ✅ CodeQL SAST Scan Completed" >> $GITHUB_STEP_SUMMARY
+          echo "### CodeQL SAST Scan Completed Successfully " >> $GITHUB_STEP_SUMMARY
 
   dast:
     name: Perform Dynamic Analysis with OWASP ZAP (DAST)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: analyze
 
     steps:
@@ -81,17 +81,29 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
           nohup python app.py &
-      
-      - name: Wait for app to start
-        run: sleep 15
 
-      - name: Run ZAP Baseline Scan
+      - name: Wait for the app to start
+        run: |
+          echo "Waiting for the app to start..."
+          for i in {1..15}; do
+            if curl --silent --fail http://localhost:8000 > /dev/null; then
+              echo "✅ App is up!"
+              break
+            fi
+            echo "⏳ App not up yet... retrying ($i/15)"
+            sleep 5
+          done
+
+      - name: Run OWASP ZAP Baseline Scan
         run: |
           docker run --rm --network="host" \
-            -v ${{ github.workspace }}:/zap/wrk/:rw \
-            zaproxy/zap-stable zap-baseline.py \
-            -t http://localhost:8000 \
-            -r zap-report.html -z "-config api.disablekey=true" || true
+            -v ${{ github.workspace }}:/zap/wrk:rw \
+            -w /zap/wrk \
+            zaproxy/zap-stable \
+            zap-baseline.py -t http://localhost:8000 -r zap-report.html -z "-config api.disablekey=true" || true
+
+      - name: List all files for debug
+        run: find ${{ github.workspace }} -type f
 
       - name: Fail if report was not generated
         run: |
@@ -107,3 +119,4 @@ jobs:
         with:
           name: ZAP-DAST-Report
           path: zap-report.html
+
