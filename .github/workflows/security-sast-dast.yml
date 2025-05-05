@@ -2,9 +2,11 @@ name: SAST and DAST Security Scan
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -18,20 +20,25 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v3
         with:
           python-version: '3.10'
 
       - name: Cache pip dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v3
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev libatlas-base-dev gfortran
 
       - name: Install Python dependencies
         run: |
@@ -52,7 +59,8 @@ jobs:
         uses: github/codeql-action/analyze@v3
 
       - name: Summarize CodeQL results
-        run: echo "### CodeQL SAST Scan Completed Successfully ✅" >> $GITHUB_STEP_SUMMARY
+        run: |
+          echo "### ✅ CodeQL SAST Scan Completed" >> $GITHUB_STEP_SUMMARY
 
   dast:
     name: Perform Dynamic Analysis with OWASP ZAP (DAST)
@@ -60,7 +68,7 @@ jobs:
     needs: analyze
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -73,24 +81,19 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
           nohup python app.py &
+      
+      - name: Wait for app to start
+        run: sleep 15
 
-      - name: Wait for the app to start
-        run: sleep 20
-
-      - name: Pull OWASP ZAP Docker image
-        run: docker pull zaproxy/zap-stable
-
-      - name: Run ZAP Baseline Scan against live app
+      - name: Run ZAP Baseline Scan
         run: |
           docker run --rm --network="host" \
             -v ${{ github.workspace }}:/zap/wrk/:rw \
-            zaproxy/zap-stable zap-baseline.py \
-            -t http://localhost:8000 -r zap-report.html -z "-config api.disablekey=true" || true
+            owasp/zap2docker-weekly zap-baseline.py \
+            -t http://localhost:8000 \
+            -r zap-report.html -z "-config api.disablekey=true" || true
 
-      - name: List files (for debug)
-        run: find ${{ github.workspace }} -type f
-
-      - name: Fail if ZAP report is missing
+      - name: Fail if report was not generated
         run: |
           if [ ! -f "${{ github.workspace }}/zap-report.html" ]; then
             echo "❌ ZAP report not found!"
@@ -99,7 +102,7 @@ jobs:
             echo "✅ ZAP report found."
           fi
 
-      - name: Upload ZAP HTML Report
+      - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
           name: ZAP-DAST-Report
