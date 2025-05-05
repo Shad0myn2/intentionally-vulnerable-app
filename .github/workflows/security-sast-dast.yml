@@ -63,24 +63,30 @@ jobs:
           echo "### CodeQL SAST Scan Completed Successfully " >> $GITHUB_STEP_SUMMARY
 
   dast:
-    name: Perform Dynamic Analysis with OWASP ZAP (DAST)
-    runs-on: ubuntu-22.04
-    needs: analyze
+    name: Run ZAP Baseline Scan
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v2
         with:
-          python-version: '3.10'
+          python-version: '3.x'
 
       - name: Install dependencies and run app
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          nohup python app.py &
+          nohup python app.py > app.log 2>&1 &
+
+      - name: Show app logs (for debugging if it crashes early)
+        run: |
+          sleep 3
+          echo "========== APP LOGS =========="
+          cat app.log || echo "No logs found"
+          echo "=============================="
 
       - name: Wait for the app to start
         run: |
@@ -94,29 +100,26 @@ jobs:
             sleep 5
           done
 
-      - name: Run OWASP ZAP Baseline Scan
+      - name: Run ZAP Baseline Scan
         run: |
+          docker pull zaproxy/zap-stable
           docker run --rm --network="host" \
-            -v ${{ github.workspace }}:/zap/wrk:rw \
-            -w /zap/wrk \
-            zaproxy/zap-stable \
-            zap-baseline.py -t http://localhost:8000 -r zap-report.html -z "-config api.disablekey=true" || true
-
-      - name: List all files for debug
-        run: find ${{ github.workspace }} -type f
+            -v $(pwd):/zap/wrk/:rw \
+            zaproxy/zap-stable zap-baseline.py \
+            -t http://localhost:8000 \
+            -r zap-report.html
 
       - name: Fail if report was not generated
         run: |
-          if [ ! -f "${{ github.workspace }}/zap-report.html" ]; then
+          if [ ! -f "$(pwd)/zap-report.html" ]; then
             echo "❌ ZAP report not found!"
             exit 1
           else
-            echo "✅ ZAP report found."
+            echo "✅ ZAP report generated successfully!"
           fi
 
       - name: Upload ZAP Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: ZAP-DAST-Report
+          name: ZAP HTML Report
           path: zap-report.html
-
